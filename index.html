@@ -4240,8 +4240,111 @@ uniform float finishAmount;`).replace("#include <map_fragment>",`#include <map_f
 
 </script>
   <script>
-(()=>{var e=document.querySelector("#music-audio"),o=document.querySelector("[data-music=play]"),n=document.querySelector("#music-seek"),s=document.querySelector("#music-elapsed"),c=document.querySelector("#music-duration"),u=document.querySelector("#music-status"),i;function p(){let t=document.querySelector("#music-data");if(!t)return i||e.dataset.src;let r=t.textContent.trim(),a;if(Uint8Array.fromBase64)a=Uint8Array.fromBase64(r);else{let f=atob(r);a=Uint8Array.from(f,y=>y.charCodeAt(0))}return i=URL.createObjectURL(new Blob([a],{type:"audio/mpeg"})),t.remove(),i}function l(t){let r=Math.floor(t);return`${Math.floor(r/60)}:${String(r%60).padStart(2,"0")}`}function d(){let t=!e.paused&&!e.ended,r=t?"\u6682\u505C\u6B4C\u66F2":"\u64AD\u653E\u6B4C\u66F2";o.setAttribute("aria-label",r),o.title=r,o.querySelector("use").setAttribute("href",t?"#pause":"#music-play");let a=Number.isFinite(e.duration)&&e.duration>0;n.disabled=!a,s.textContent=l(e.currentTime),a?(c.textContent=l(Math.round(e.duration)),n.max=String(e.duration),n.value=String(e.currentTime),n.setAttribute("aria-valuetext",`${s.textContent} / ${c.textContent}`)):n.removeAttribute("aria-valuetext")}function m(){u.textContent="\u6B4C\u66F2\u6682\u65F6\u65E0\u6CD5\u64AD\u653E\uFF0C\u8BF7\u91CD\u8BD5\u3002",u.hidden=!1,d()}o.addEventListener("click",async()=>{if(!e.paused&&!e.ended){e.pause();return}u.hidden=!0;try{(!e.src||e.error)&&(e.src=p()),e.ended&&(e.currentTime=0),await e.play()}catch(t){t.name!=="AbortError"&&m()}});n.addEventListener("input",()=>{n.disabled||(e.currentTime=Number(n.value))});for(let t of["play","pause","ended","loadedmetadata","durationchange","timeupdate","emptied"])e.addEventListener(t,d);e.addEventListener("error",m);d();o.disabled=!1;})();
+{
+const audio = document.querySelector('#music-audio');
+const play = document.querySelector('[data-music=play]');
+const seek = document.querySelector('#music-seek');
+const elapsed = document.querySelector('#music-elapsed');
+const duration = document.querySelector('#music-duration');
+const status = document.querySelector('#music-status');
+let embeddedUrl;
 
+function source() {
+  const embedded = document.querySelector('#music-data');
+  if (!embedded) return embeddedUrl || audio.dataset.src;
+  const encoded = embedded.textContent.trim();
+  let bytes;
+  if (Uint8Array.fromBase64) {
+    bytes = Uint8Array.fromBase64(encoded);
+  } else {
+    const binary = atob(encoded);
+    bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+  }
+  embeddedUrl = URL.createObjectURL(new Blob([bytes], {type: 'audio/mpeg'}));
+  embedded.remove();
+  return embeddedUrl;
+}
+
+function timestamp(seconds) {
+  const whole = Math.floor(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
+function refresh() {
+  const active = !audio.paused && !audio.ended;
+  const label = active ? '暂停歌曲' : '播放歌曲';
+  play.setAttribute('aria-label', label);
+  play.title = label;
+  play.querySelector('use').setAttribute('href', active ? '#pause' : '#music-play');
+
+  const ready = Number.isFinite(audio.duration) && audio.duration > 0;
+  seek.disabled = !ready;
+  elapsed.textContent = timestamp(audio.currentTime);
+  if (ready) {
+    duration.textContent = timestamp(Math.round(audio.duration));
+    seek.max = String(audio.duration);
+    seek.value = String(audio.currentTime);
+    seek.setAttribute('aria-valuetext', `${elapsed.textContent} / ${duration.textContent}`);
+  } else {
+    seek.removeAttribute('aria-valuetext');
+  }
+}
+
+function reportError() {
+  status.textContent = '歌曲暂时无法播放，请重试。';
+  status.hidden = false;
+  refresh();
+}
+
+function waitForGesture(waiting) {
+  for (const event of ['click', 'keydown']) {
+    if (waiting) document.addEventListener(event, playOnGesture, true);
+    else document.removeEventListener(event, playOnGesture, true);
+  }
+}
+
+function playOnGesture(event) {
+  if (!event.isTrusted || event.target.closest?.('[data-music="play"]')) return;
+  if (event.type === 'keydown' && (event.repeat || !['Enter', ' '].includes(event.key))) return;
+  waitForGesture(false);
+  void startPlayback();
+}
+
+async function startPlayback() {
+  status.hidden = true;
+  try {
+    if (!audio.src || audio.error) audio.src = source();
+    if (audio.ended) audio.currentTime = 0;
+    await audio.play();
+    waitForGesture(false);
+  } catch (error) {
+    if (error.name === 'NotAllowedError') {
+      status.textContent = '点击页面即可开始播放。';
+      status.hidden = false;
+      waitForGesture(true);
+    } else if (error.name !== 'AbortError') {
+      reportError();
+    }
+  }
+}
+
+play.addEventListener('click', () => {
+  waitForGesture(false);
+  if (!audio.paused && !audio.ended) audio.pause();
+  else void startPlayback();
+});
+
+seek.addEventListener('input', () => {
+  if (!seek.disabled) audio.currentTime = Number(seek.value);
+});
+for (const event of ['play', 'pause', 'ended', 'loadedmetadata', 'durationchange', 'timeupdate', 'emptied']) {
+  audio.addEventListener(event, refresh);
+}
+audio.addEventListener('error', reportError);
+refresh();
+play.disabled = false;
+void startPlayback();
+}
 </script>
 <!-- Bundled third-party licenses
 The MIT License
